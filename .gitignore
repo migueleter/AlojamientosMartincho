@@ -2,6 +2,7 @@
 scripts/token.json
 scripts/credentials.json
 scripts/raw_emails/
+scripts/raw_emails_other/
 *.eml
 *.mbox
 
@@ -13,6 +14,9 @@ private/
 screenshots/
 takeout-*/
 alojamientos-martincho *
+alojamientos-martincho_*
+*-enrichment-report.json
+.claude/
 report.json
 
 # Credenciales/configuración local
