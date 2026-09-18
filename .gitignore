@@ -1,0 +1,21 @@
+# Datos privados y credenciales
+scripts/token.json
+scripts/credentials.json
+scripts/raw_emails/
+*.eml
+*.mbox
+
+# Artefactos locales
+scripts/__pycache__/
+*.py[cod]
+backups/
+private/
+screenshots/
+takeout-*/
+alojamientos-martincho *
+report.json
+
+# Credenciales/configuración local
+.env
+.env.*
+!.env.example
