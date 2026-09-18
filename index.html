@@ -3319,6 +3319,54 @@
       "url": "",
       "fallbackUrl": "",
       "platform": "Web"
+    },
+    {
+      "id": "2012-04-01-barcelo-maya-beach-1789705535366",
+      "date": "2012-04-01",
+      "endDate": "2012-04-08",
+      "name": "Barceló Maya Beach",
+      "locality": "Riviera Maya",
+      "province": "",
+      "country": "Mexico",
+      "amount": null,
+      "currency": "EUR",
+      "period": "total",
+      "photo": "assets/photos/2012-04-01-barcelo-maya-beach-1789706551409.png",
+      "url": "https://www.barcelo.com/en-us/barcelo-maya-beach/",
+      "fallbackUrl": "",
+      "platform": "Dominicana Tours"
+    },
+    {
+      "id": "2014-04-13-casa-rio-blanco-eco-friendly-b-b-1789705784727",
+      "date": "2014-04-13",
+      "endDate": "2014-04-14",
+      "name": "Casa Rio Blanco Eco-Friendly B&B",
+      "locality": "Rio Blanco",
+      "province": "",
+      "country": "Costa Rica",
+      "amount": 67,
+      "currency": "EUR",
+      "period": "total",
+      "photo": "assets/photos/2014-04-13-casa-rio-blanco-eco-friendly-b-b-1789705784727.png",
+      "url": "https://www.casarioblanco.net/",
+      "fallbackUrl": "",
+      "platform": "Web"
+    },
+    {
+      "id": "2014-04-18-nature-lodge-finca-los-caballos-1789706429093",
+      "date": "2014-04-18",
+      "endDate": "2014-04-20",
+      "name": "Nature Lodge Finca Los Caballos",
+      "locality": "Montezuma",
+      "province": "",
+      "country": "Costa Rica",
+      "amount": 169.18,
+      "currency": "EUR",
+      "period": "total",
+      "photo": "assets/photos/2014-04-18-nature-lodge-finca-los-caballos-1789706422727.webp",
+      "url": "",
+      "fallbackUrl": "https://www.tripadvisor.es/Hotel_Review-g309278-d622326-Reviews-Hotel_Nature_Lodge_Finca_Los_Caballos-Montezuma_Province_of_Puntarenas.html",
+      "platform": "Web"
     }
   ]
 }
@@ -3539,7 +3587,7 @@
         const name = cleanText(item.name ?? item.title ?? item.nombre ?? item.alojamiento);
         const url = safeLink(item.url ?? item.propertyUrl ?? item.directUrl ?? item.web ?? item.enlace);
         const fallbackUrl = safeLink(item.fallbackUrl ?? item.bookingUrl ?? item.platformUrl ?? item.reservationUrl ?? item.link ?? item.booking ?? item.airbnb);
-        const photo = safePhoto(item.photo ?? item.photoUrl ?? item.image ?? item.imageUrl ?? item.foto);
+        const photo = safePhoto(stripOwnOrigin(item.photo ?? item.photoUrl ?? item.image ?? item.imageUrl ?? item.foto));
         const periodText = String(price.period ?? item.period ?? item.precioPeriodo ?? "total").toLowerCase();
         const period = periodText === "night" || periodText.includes("noche") || periodText.includes("night") ? "night" : "total";
         return {
@@ -3965,11 +4013,39 @@
         }
         const reader = new FileReader();
         reader.addEventListener("load", () => {
-          els.photoData.value = String(reader.result || "");
+          const dataUrl = String(reader.result || "");
+          els.photoData.value = dataUrl;
           els.photoUrl.value = "";
-          updatePhotoPreview(els.photoData.value);
+          updatePhotoPreview(dataUrl);
+          uploadPhotoToServer(dataUrl);
         });
         reader.readAsDataURL(file);
+      }
+
+      function uploadPhotoToServer(dataUrl) {
+        const date = cleanDate(document.getElementById("form-date").value) || "sin-fecha";
+        const name = cleanText(document.getElementById("form-name").value) || "estancia";
+        const filename = `${date}-${slugify(name)}-${Date.now()}`;
+        fetch("api/upload-photo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename, dataUrl })
+        })
+          .then((response) => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+          })
+          .then((result) => {
+            if (result?.path && els.photoData.value === dataUrl) {
+              els.photoData.value = result.path;
+            }
+          })
+          .catch((error) => {
+            console.warn(
+              "No se pudo guardar la foto como archivo (¿está corriendo scripts/server.py?). Se guardará incrustada en el JSON.",
+              error
+            );
+          });
       }
 
       function updatePhotoPreview(source) {
@@ -4190,6 +4266,13 @@
         } catch (error) {
           return "";
         }
+      }
+
+      function stripOwnOrigin(value) {
+        const text = cleanText(value);
+        if (!text) return text;
+        const prefix = `${window.location.origin}/`;
+        return text.startsWith(prefix) ? text.slice(prefix.length) : text;
       }
 
       function safePhoto(value) {

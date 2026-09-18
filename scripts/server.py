@@ -3,18 +3,25 @@
 Sirve los archivos estaticos del proyecto (index.html, JSON, etc.) igual que
 `python -m http.server`, y ademas acepta POST a /alojamientos-martincho.json
 para que la propia app pueda guardar en disco los cambios hechos desde la UI
-(altas, ediciones, borrados, importaciones).
+(altas, ediciones, borrados, importaciones), y POST a /api/upload-photo para
+guardar como archivo las fotos subidas desde el formulario en vez de
+incrustarlas en base64 dentro del JSON.
 """
 
+import base64
 import http.server
 import json
 import os
+import re
 import socketserver
 
 PORT = 8000
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_FILE = os.path.join(ROOT, "alojamientos-martincho.json")
+PHOTOS_DIR = os.path.join(ROOT, "assets", "photos")
 MAX_RECORDS_DROP = 3  # protección: no permitir que un POST borre de golpe mas estancias que esto
+MAX_PHOTO_BYTES = 4 * 1024 * 1024
+DATA_URL_RE = re.compile(r"^data:image/(png|jpeg|jpg|gif|webp);base64,(.+)$", re.DOTALL | re.IGNORECASE)
 
 
 def _record_count(path):
@@ -30,6 +37,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=ROOT, **kwargs)
 
     def do_POST(self):
+        if self.path == "/api/upload-photo":
+            self._handle_upload_photo()
+            return
         if self.path != "/alojamientos-martincho.json":
             self.send_error(404, "Solo se puede escribir alojamientos-martincho.json")
             return
@@ -66,6 +76,50 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)
+
+    def _handle_upload_photo(self):
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length)
+        try:
+            payload = json.loads(body)
+        except ValueError as error:
+            self.send_error(400, f"JSON invalido: {error}")
+            return
+
+        raw_filename = str(payload.get("filename") or "estancia")
+        data_url = str(payload.get("dataUrl") or "")
+
+        match = DATA_URL_RE.match(data_url)
+        if not match:
+            self.send_error(400, "dataUrl debe ser una imagen en base64 (png/jpeg/gif/webp)")
+            return
+
+        ext = match.group(1).lower()
+        ext = "jpg" if ext == "jpeg" else ext
+        try:
+            raw = base64.b64decode(match.group(2))
+        except ValueError as error:
+            self.send_error(400, f"base64 invalido: {error}")
+            return
+
+        if len(raw) > MAX_PHOTO_BYTES:
+            self.send_error(413, f"La foto supera {MAX_PHOTO_BYTES // (1024 * 1024)} MB")
+            return
+
+        safe_name = re.sub(r"[^a-zA-Z0-9_-]+", "-", raw_filename).strip("-") or "estancia"
+        filename = f"{safe_name}.{ext}"
+        os.makedirs(PHOTOS_DIR, exist_ok=True)
+        with open(os.path.join(PHOTOS_DIR, filename), "wb") as file:
+            file.write(raw)
+
+        relative_path = f"assets/photos/{filename}"
+        print(f"Foto guardada: {relative_path} ({len(raw)} bytes).")
+        response = json.dumps({"ok": True, "path": relative_path}).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(response)))
+        self.end_headers()
+        self.wfile.write(response)
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
