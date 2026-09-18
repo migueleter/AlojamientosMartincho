@@ -3517,10 +3517,12 @@
 
       function loadView() {
         try {
-          return localStorage.getItem(`${STORAGE_KEY}-view`) === "cards" ? "cards" : "table";
+          const saved = localStorage.getItem(`${STORAGE_KEY}-view`);
+          if (saved === "cards" || saved === "table") return saved;
         } catch (error) {
-          return "table";
+          // sin localStorage disponible, se usa el valor por defecto segun el ancho de pantalla
         }
+        return window.matchMedia("(max-width: 700px)").matches ? "cards" : "table";
       }
 
       function saveRecords() {
